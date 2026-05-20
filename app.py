@@ -8,26 +8,24 @@ from PIL import Image
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import matplotlib.pyplot as plt
+import os
+import gdown
+
+# -----------------------
+# MODEL DOWNLOAD
+# -----------------------
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1Glb1f239ny-z9YChFObxYaG7yF2Vda6j"
+MODEL_PATH = "best_effnetv2_rw_s.pth"
+
+if not os.path.exists(MODEL_PATH):
+    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
 # -----------------------
 # CONFIG
 # -----------------------
-import os
-import gdown
-
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1Glb1f239ny-z9YChFObxYaG7yF2Vda6j"
-MODEL_PATH = "best_effnetv2_rw_s.pth"
-
-# Download model if not already present
-if not os.path.exists(MODEL_PATH):
-    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
-
-
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 IMG_SIZE = 384
-MODEL_PATH = "best_effnetv2_rw_s.pth"
 
-# Preprocessing
 tfm = A.Compose([
     A.Resize(IMG_SIZE, IMG_SIZE),
     A.ToFloat(max_value=255.0),
@@ -73,30 +71,48 @@ def load_model():
 model = load_model()
 
 # -----------------------
-# GRAD-CAM FUNCTION
+# GRAD-CAM (Correct for EfficientNetV2)
 # -----------------------
-def generate_gradcam(model, img_tensor, gender_tensor):
-    img_tensor.requires_grad = True
+last_conv_output = None
+last_conv_grad = None
+
+def save_activation(module, input, output):
+    global last_conv_output
+    last_conv_output = output
+
+def save_gradient(module, grad_input, grad_output):
+    global last_conv_grad
+    last_conv_grad = grad_output[0]
+
+# Hook the LAST CONV layer of EfficientNetV2-RW-S
+target_layer = model.backbone.blocks[-1][-1].conv_pwl
+target_layer.register_forward_hook(save_activation)
+target_layer.register_full_backward_hook(save_gradient)
+
+def generate_gradcam(img_tensor, gender_tensor):
+    global last_conv_output, last_conv_grad
+
+    last_conv_output = None
+    last_conv_grad = None
 
     pred, logits = model(img_tensor, gender_tensor)
     pred.backward()
 
-    # Extract gradients & activations
-    gradients = model.backbone.get_classifier().weight.grad
-    activations = model.backbone.forward_features(img_tensor)
+    activations = last_conv_output.detach().cpu().numpy()[0]
+    gradients = last_conv_grad.detach().cpu().numpy()[0]
 
-    pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
-    activations = activations.detach().cpu().numpy()[0]
+    weights = np.mean(gradients, axis=(1, 2))
+    cam = np.zeros(activations.shape[1:], dtype=np.float32)
 
-    for i in range(len(pooled_gradients)):
-        activations[i, :, :] *= pooled_gradients[i].cpu().numpy()
+    for i, w in enumerate(weights):
+        cam += w * activations[i]
 
-    heatmap = np.mean(activations, axis=0)
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
+    cam = np.maximum(cam, 0)
+    cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
+    cam = cam - cam.min()
+    cam = cam / cam.max()
 
-    heatmap = cv2.resize(heatmap, (IMG_SIZE, IMG_SIZE))
-    heatmap = np.uint8(255 * heatmap)
+    heatmap = np.uint8(255 * cam)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
     return heatmap
@@ -104,20 +120,19 @@ def generate_gradcam(model, img_tensor, gender_tensor):
 # -----------------------
 # STREAMLIT UI
 # -----------------------
-st.set_page_config(page_title="Bone Age Predictor", layout="centered")
+st.set_page_config(page_title="Bone Age Predictor", layout="wide")
 
-# Custom CSS
 st.markdown("""
     <style>
         .title {
-            font-size: 40px;
-            font-weight: 700;
+            font-size: 42px;
+            font-weight: 800;
             text-align: center;
-            color: #1F618D;
+            color: #0A3D62;
             margin-bottom: 5px;
         }
         .subtitle {
-            font-size: 18px;
+            font-size: 20px;
             text-align: center;
             color: #555;
             margin-bottom: 25px;
@@ -125,18 +140,18 @@ st.markdown("""
         .prediction-box {
             padding: 20px;
             border-radius: 12px;
-            background-color: #EBF5FB;
+            background-color: #E8F6F3;
             text-align: center;
-            font-size: 22px;
-            font-weight: 600;
-            color: #154360;
+            font-size: 24px;
+            font-weight: 700;
+            color: #0E6251;
             margin-top: 20px;
         }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="title">🩻 Bone Age Prediction</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Upload a hand X-ray and let the model estimate bone age.</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Upload a hand X-ray and view the model’s prediction and attention map.</div>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload X-ray Image", type=["png", "jpg", "jpeg"])
 
@@ -148,22 +163,24 @@ gender_option = st.radio(
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("L")
-    st.image(image, caption="Uploaded X-ray", use_column_width=True)
+    img_np = np.array(image)
+    img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.image(image, caption="Uploaded X-ray", use_column_width=True)
 
     if st.button("Predict Bone Age"):
-        img_np = np.array(image)
-        img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
-
         img_t = tfm(image=img_rgb)["image"]
         img_t = img_t.unsqueeze(0).to(DEVICE)
 
-        # Gender handling
         if gender_option == "Male":
             gender_val = 1
         elif gender_option == "Female":
             gender_val = 0
         else:
-            gender_val = 0  # default
+            gender_val = 0
 
         gender_t = torch.tensor([gender_val], dtype=torch.long, device=DEVICE)
 
@@ -172,17 +189,13 @@ if uploaded_file is not None:
 
         st.markdown(
             f'<div class="prediction-box">Predicted Bone Age:<br>'
-            f'<span style="font-size:30px;">{pred_months.item():.1f} months</span><br>'
+            f'<span style="font-size:32px;">{pred_months.item():.1f} months</span><br>'
             f'({pred_months.item()/12:.2f} years)</div>',
             unsafe_allow_html=True
         )
 
-        # -----------------------
-        # SHOW GRAD-CAM
-        # -----------------------
-        st.subheader("Model Attention (Grad-CAM)")
-        heatmap = generate_gradcam(model, img_t, gender_t)
-
+        heatmap = generate_gradcam(img_t, gender_t)
         overlay = cv2.addWeighted(cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR), 0.5, heatmap, 0.5, 0)
 
-        st.image(overlay, caption="Grad-CAM Heatmap", use_column_width=True)
+        with col2:
+            st.image(overlay, caption="Grad-CAM Heatmap", use_column_width=True)
