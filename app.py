@@ -123,106 +123,207 @@ def generate_gradcam(img_tensor, gender_tensor):
 
 
 # -----------------------
-# SIMPLE X-RAY VALIDATION
+# HAND X-RAY VALIDATION
 # -----------------------
-def is_valid_xray(img_pil):
+def is_hand_xray(img_pil):
     gray = np.array(img_pil)
     brightness = np.mean(gray)
     contrast = np.std(gray)
-    # Heuristic: X-rays are darker with strong contrast (bones vs background)
-    if brightness < 170 and contrast > 25:
+
+    # Hand X-rays: dark background + bright bone edges
+    if brightness < 160 and contrast > 30:
         return True
     return False
 
 
 # -----------------------
-# STREAMLIT UI CONFIG
+# REGION DETECTION (CARPAL / METACARPALS / PHALANGES)
 # -----------------------
-st.set_page_config(page_title="Bone Age AI • Grad-CAM", layout="wide")
-
-# Global dark + gradient cinematic style
-st.markdown(
+def detect_focus_region(heatmap):
     """
-    <style>
-    body {
-        background: radial-gradient(circle at top, #1b2735 0, #090a0f 55%, #000000 100%);
-        color: #f5f5f5;
+    Detect whether Grad-CAM focuses on carpals, metacarpals, or phalanges.
+    """
+    h = heatmap.shape[0]
+
+    # Divide into 3 equal vertical zones
+    zone_h = h // 3
+    phalanges_zone = heatmap[0:zone_h, :, :]
+    metacarpals_zone = heatmap[zone_h:2*zone_h, :, :]
+    carpals_zone = heatmap[2*zone_h:h, :, :]
+
+    ph = np.sum(phalanges_zone)
+    mt = np.sum(metacarpals_zone)
+    cp = np.sum(carpals_zone)
+
+    regions = {
+        "Phalanges (Fingers)": ph,
+        "Metacarpals (Palm)": mt,
+        "Carpal Bones (Wrist)": cp
     }
-    .main {
-        background: transparent;
-    }
-    .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 2rem;
-        max-width: 1100px;
-    }
-    .title {
-        font-size: 40px;
-        font-weight: 800;
-        text-align: center;
-        color: #EAF2F8;
-        margin-bottom: 4px;
-        text-shadow: 0 0 18px rgba(0, 191, 255, 0.7);
-    }
-    .subtitle {
-        font-size: 17px;
-        text-align: center;
-        color: #D0D3D4;
-        margin-bottom: 25px;
-    }
-    .prediction-box {
-        padding: 18px;
-        border-radius: 14px;
-        background: linear-gradient(135deg, rgba(0, 191, 255, 0.12), rgba(0, 255, 200, 0.08));
-        border: 1px solid rgba(0, 191, 255, 0.4);
-        text-align: center;
-        font-size: 22px;
-        font-weight: 700;
-        color: #E8F8F5;
-        margin-top: 18px;
-        box-shadow: 0 0 25px rgba(0, 191, 255, 0.25);
-    }
-    .prediction-box span {
-        font-size: 30px;
-        color: #00E5FF;
-    }
-    .side-card {
-        background: rgba(15, 23, 42, 0.85);
-        border-radius: 16px;
-        padding: 18px 18px 14px 18px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        box-shadow: 0 0 25px rgba(15, 23, 42, 0.9);
-    }
-    .section-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #E5E7EB;
-        margin-bottom: 8px;
-    }
-    .footer-text {
-        text-align: center;
-        font-size: 13px;
-        color: #9CA3AF;
-        margin-top: 25px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+
+    focus_region = max(regions, key=regions.get)
+    return focus_region, regions
+
+
+# -----------------------
+# STREAMLIT PAGE CONFIG
+# -----------------------
+st.set_page_config(page_title="Bone Age AI • Cinematic Grad-CAM", layout="wide")
+
+# -----------------------
+# GLOBAL CINEMATIC STYLE
+# -----------------------
+st.markdown("""
+<style>
+
+body {
+    background: linear-gradient(135deg, #0a0f1f 0%, #0d1b2a 40%, #000000 100%);
+    background-attachment: fixed;
+    color: #f5f5f5;
+}
+
+.main {
+    background: transparent;
+}
+
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1150px;
+}
+
+/* Title Glow */
+.title {
+    font-size: 46px;
+    font-weight: 900;
+    text-align: center;
+    color: #EAF2F8;
+    margin-bottom: 4px;
+    letter-spacing: 0.06em;
+    text-shadow: 0 0 25px rgba(0, 255, 255, 0.9);
+}
+
+/* Subtitle */
+.subtitle {
+    font-size: 18px;
+    text-align: center;
+    color: #D0D3D4;
+    margin-bottom: 26px;
+}
+
+/* Glassmorphism Card */
+.side-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 18px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 35px rgba(0, 255, 255, 0.15);
+    backdrop-filter: blur(14px);
+}
+
+/* Neon Button */
+.stButton>button {
+    width: 100%;
+    border-radius: 999px;
+    border: 1px solid rgba(56, 189, 248, 0.7);
+    background: radial-gradient(circle at top left, #0ea5e9 0, #0369a1 40%, #020617 100%);
+    color: #E5F6FF;
+    font-weight: 600;
+    padding: 0.55rem 1rem;
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.55);
+    transition: all 0.18s ease-in-out;
+}
+
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(56, 189, 248, 1);
+}
+
+/* Prediction Box */
+.prediction-box {
+    padding: 18px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(0, 191, 255, 0.16), rgba(0, 255, 200, 0.10));
+    border: 1px solid rgba(0, 191, 255, 0.55);
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #E8F8F5;
+    margin-top: 18px;
+    box-shadow: 0 0 28px rgba(0, 191, 255, 0.35);
+}
+
+.prediction-box span {
+    font-size: 32px;
+    color: #00E5FF;
+}
+
+/* Grad-CAM Titles */
+.gradcam-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #E5E7EB;
+    margin-bottom: 6px;
+}
+
+/* Fade-in Animation */
+.fade-in {
+    animation: fadeIn 1.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Popup Modal */
+.popup {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.popup-content {
+    background: rgba(255,255,255,0.1);
+    padding: 25px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(12px);
+    color: white;
+    text-align: center;
+    width: 350px;
+    box-shadow: 0 0 25px rgba(0,255,255,0.4);
+}
+
+/* Footer */
+.footer-text {
+    text-align: center;
+    font-size: 13px;
+    color: #9CA3AF;
+    margin-top: 26px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------
 # HEADER
 # -----------------------
-st.markdown('<div class="title">🩻 Bone Age AI • Grad‑CAM</div>', unsafe_allow_html=True)
+st.markdown('<div class="title">BONE AGE AI • GRAD‑CAM LAB</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle">Upload a hand X‑ray, estimate bone age in months, and see where the model is focusing.</div>',
+    '<div class="subtitle">Upload a hand X‑ray, estimate bone age in months, and see exactly where the model is focusing.</div>',
     unsafe_allow_html=True,
 )
 
 # -----------------------
 # LAYOUT
 # -----------------------
-left, right = st.columns([1.1, 1])
+left, right = st.columns([1.05, 1])
 
 with left:
     st.markdown('<div class="side-card">', unsafe_allow_html=True)
@@ -245,7 +346,7 @@ with left:
 
 with right:
     st.markdown('<div class="side-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">2️⃣ Model Output</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">2️⃣ Model Output & Attention</div>', unsafe_allow_html=True)
     output_placeholder = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -257,20 +358,23 @@ if uploaded_file is not None:
     img_np = np.array(image)
     img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
 
-    # Show original X-ray
     with left:
         st.image(image, caption="Uploaded Hand X‑ray", use_column_width=True)
 
     if predict_button:
-        # Validate X-ray
-        if not is_valid_xray(image):
-            with right:
-                output_placeholder.error(
-                    "⚠️ This does not look like a typical hand X‑ray.\n\n"
-                    "Please upload a clear hand X‑ray image to estimate bone age."
-                )
+        # Enforce hand X-ray only
+        if not is_hand_xray(image):
+            st.markdown("""
+            <div class="popup">
+                <div class="popup-content fade-in">
+                    <h3 style="color:#00E5FF;">⚠️ Invalid Image</h3>
+                    <p>This does not appear to be a hand X‑ray.</p>
+                    <p>Please upload a clear hand X‑ray image.</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
         else:
-            # Preprocess
             img_t = tfm(image=img_rgb)["image"]
             img_t = img_t.unsqueeze(0).to(DEVICE)
 
@@ -283,17 +387,16 @@ if uploaded_file is not None:
 
             gender_t = torch.tensor([gender_val], dtype=torch.long, device=DEVICE)
 
-            # Prediction
             with torch.no_grad():
                 pred_months, logits = model(img_t, gender_t)
 
-            # Display prediction
+            months_val = pred_months.item()
+            years_val = months_val / 12.0
+
             with right:
-                months_val = pred_months.item()
-                years_val = months_val / 12.0
                 output_placeholder.markdown(
                     f"""
-                    <div class="prediction-box">
+                    <div class="prediction-box fade-in">
                         Predicted Bone Age<br>
                         <span>{months_val:.1f} months</span><br>
                         ({years_val:.2f} years)
@@ -302,29 +405,52 @@ if uploaded_file is not None:
                     unsafe_allow_html=True,
                 )
 
-            # Grad-CAM
             heatmap = generate_gradcam(img_t, gender_t)
 
-            # Resize original to match heatmap size to avoid cv2 error
             img_resized = cv2.resize(
                 cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR),
                 (IMG_SIZE, IMG_SIZE)
             )
             overlay = cv2.addWeighted(img_resized, 0.5, heatmap, 0.5, 0)
 
-            # Side-by-side visualization
+            focus_region, region_scores = detect_focus_region(heatmap)
+
+            st.markdown(f"""
+            <div style="
+                padding: 20px;
+                margin-top: 20px;
+                border-radius: 18px;
+                background: rgba(0, 255, 255, 0.08);
+                border: 1px solid rgba(0, 255, 255, 0.45);
+                box-shadow: 0 0 25px rgba(0, 255, 255, 0.55);
+                text-align: center;
+                backdrop-filter: blur(12px);
+                animation: fadeIn 1.2s ease-in-out;
+            ">
+                <div style="font-size: 26px; font-weight: 700; color: #E0FFFF;">
+                    🧠 Model Focus Area
+                </div>
+                <div style="font-size: 20px; margin-top: 8px; color: #B2EBF2;">
+                    The model is primarily focusing on:
+                </div>
+                <div style="font-size: 32px; margin-top: 10px; font-weight: 800; color: #00E5FF;">
+                    {focus_region}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             vis_col1, vis_col2 = st.columns(2)
             with vis_col1:
-                st.markdown("#### Original X‑ray")
+                st.markdown('<div class="gradcam-title fade-in">Original Hand X‑ray</div>', unsafe_allow_html=True)
                 st.image(img_resized[:, :, ::-1], use_column_width=True)
             with vis_col2:
-                st.markdown("#### Grad‑CAM Focus Map")
+                st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Focus Map</div>', unsafe_allow_html=True)
                 st.image(overlay[:, :, ::-1], use_column_width=True)
 
 else:
     with right:
         output_placeholder.info(
-            "Upload a hand X‑ray on the left and click **Run Bone Age Prediction** "
+            "Upload a **hand X‑ray** on the left and click **Run Bone Age Prediction** "
             "to see the model’s estimate and attention map."
         )
 
