@@ -123,15 +123,34 @@ def generate_gradcam(img_tensor, gender_tensor):
 
 
 # -----------------------
-# HAND X-RAY VALIDATION
+# STRICT HAND X-RAY VALIDATION
 # -----------------------
-def is_hand_xray(img_pil):
-    gray = np.array(img_pil)
+def is_hand_xray_strict(pil_img):
+    """
+    Stricter heuristic:
+    - Work on original image (before grayscale)
+    - Use brightness, contrast, and edge density
+    """
+    img = np.array(pil_img)
+
+    # If image has 3 channels, convert to gray for analysis
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img
+
     brightness = np.mean(gray)
     contrast = np.std(gray)
 
-    # Hand X-rays: dark background + bright bone edges
-    if brightness < 160 and contrast > 30:
+    # Edge density (X-rays have strong bone edges)
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = np.mean(edges > 0)
+
+    # Tuned thresholds (you can tweak if needed)
+    # - brightness: not too bright
+    # - contrast: reasonably high
+    # - edge density: enough structure
+    if brightness < 170 and contrast > 30 and edge_density > 0.02:
         return True
     return False
 
@@ -145,7 +164,6 @@ def detect_focus_region(heatmap):
     """
     h = heatmap.shape[0]
 
-    # Divide into 3 equal vertical zones
     zone_h = h // 3
     phalanges_zone = heatmap[0:zone_h, :, :]
     metacarpals_zone = heatmap[zone_h:2*zone_h, :, :]
@@ -177,7 +195,7 @@ st.markdown("""
 <style>
 
 body {
-    background: linear-gradient(135deg, #0a0f1f 0%, #0d1b2a 40%, #000000 100%);
+    background: linear-gradient(135deg, #050816 0%, #0b1220 40%, #020617 100%);
     background-attachment: fixed;
     color: #f5f5f5;
 }
@@ -289,14 +307,14 @@ body {
 }
 
 .popup-content {
-    background: rgba(255,255,255,0.1);
+    background: rgba(15,23,42,0.95);
     padding: 25px;
     border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid rgba(56,189,248,0.7);
     backdrop-filter: blur(12px);
     color: white;
     text-align: center;
-    width: 350px;
+    width: 360px;
     box-shadow: 0 0 25px rgba(0,255,255,0.4);
 }
 
@@ -354,27 +372,34 @@ with right:
 # MAIN LOGIC
 # -----------------------
 if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("L")
-    img_np = np.array(image)
-    img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
+    # Load original image (do NOT convert to gray yet)
+    orig_image = Image.open(uploaded_file).convert("RGB")
 
     with left:
-        st.image(image, caption="Uploaded Hand X‑ray", use_column_width=True)
+        st.image(orig_image, caption="Uploaded Image", use_column_width=True)
 
     if predict_button:
-        # Enforce hand X-ray only
-        if not is_hand_xray(image):
+        # Strict validation on original image
+        if not is_hand_xray_strict(orig_image):
+            # Popup with OK button
             st.markdown("""
             <div class="popup">
                 <div class="popup-content fade-in">
-                    <h3 style="color:#00E5FF;">⚠️ Invalid Image</h3>
-                    <p>This does not appear to be a hand X‑ray.</p>
-                    <p>Please upload a clear hand X‑ray image.</p>
+                    <h3 style="color:#00E5FF; margin-bottom:10px;">⚠️ Invalid Image</h3>
+                    <p style="margin-bottom:14px;">This does not appear to be a hand X‑ray.</p>
+                    <p style="margin-bottom:18px;">Please upload a clear hand X‑ray image to predict bone age.</p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            # Simple "OK" button below (user clicks, app reruns clean)
+            st.button("OK", key="invalid_ok")
             st.stop()
         else:
+            # Now safely convert to grayscale for model
+            image = orig_image.convert("L")
+            img_np = np.array(image)
+            img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
+
             img_t = tfm(image=img_rgb)["image"]
             img_t = img_t.unsqueeze(0).to(DEVICE)
 
@@ -441,7 +466,7 @@ if uploaded_file is not None:
 
             vis_col1, vis_col2 = st.columns(2)
             with vis_col1:
-                st.markdown('<div class="gradcam-title fade-in">Original Hand X‑ray</div>', unsafe_allow_html=True)
+                st.markdown('<div class="gradcam-title fade-in">Original Hand X‑ray (Processed)</div>', unsafe_allow_html=True)
                 st.image(img_resized[:, :, ::-1], use_column_width=True)
             with vis_col2:
                 st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Focus Map</div>', unsafe_allow_html=True)
