@@ -126,7 +126,6 @@ def generate_gradcam(img_tensor, gender_tensor):
 # -----------------------
 def is_hand_xray_strict(pil_img):
     img = np.array(pil_img)
-
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     else:
@@ -136,20 +135,21 @@ def is_hand_xray_strict(pil_img):
     contrast = np.std(gray)
     edges = cv2.Canny(gray, 50, 150)
     edge_density = np.mean(edges > 0)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contour_count = len(contours)
 
-    # Tuned thresholds – adjust if needed
-    if brightness < 170 and contrast > 30 and edge_density > 0.02:
+    # Hand X-rays have many small contours (bones)
+    if brightness < 170 and contrast > 30 and edge_density > 0.02 and contour_count > 100:
         return True
     return False
 
 
 # -----------------------
-# REGION DETECTION (CARPAL / METACARPALS / PHALANGES)
+# REGION DETECTION
 # -----------------------
 def detect_focus_region(heatmap):
     h = heatmap.shape[0]
     zone_h = h // 3
-
     phalanges_zone = heatmap[0:zone_h, :, :]
     metacarpals_zone = heatmap[zone_h:2*zone_h, :, :]
     carpals_zone = heatmap[2*zone_h:h, :, :]
@@ -174,113 +174,28 @@ def detect_focus_region(heatmap):
 st.set_page_config(page_title="Bone Age AI • Cinematic Grad-CAM", layout="wide")
 
 # -----------------------
-# GLOBAL CINEMATIC STYLE
+# CINEMATIC STYLE
 # -----------------------
 st.markdown("""
 <style>
-
 body {
     background: radial-gradient(circle at 20% 20%, #050816 0%, #0b1220 40%, #020617 100%);
     background-size: 200% 200%;
     animation: gradientShift 12s ease infinite;
     color: #f5f5f5;
 }
-
 @keyframes gradientShift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
 }
-
-.fade-in {
-    animation: fadeIn 1.0s ease-in-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Centered card */
-.center-card {
-    margin: 0 auto;
-    max-width: 520px;
-    background: rgba(15,23,42,0.85);
-    border-radius: 18px;
-    padding: 22px;
-    border: 1px solid rgba(56,189,248,0.6);
-    box-shadow: 0 0 35px rgba(0,255,255,0.35);
-    backdrop-filter: blur(14px);
-}
-
-/* Info card */
-.info-card {
-    margin: 18px auto 26px auto;
-    max-width: 820px;
-    background: rgba(0,255,255,0.08);
-    border-radius: 16px;
-    padding: 18px 22px;
-    border: 1px solid rgba(0,255,255,0.45);
-    box-shadow: 0 0 28px rgba(0,255,255,0.35);
-    backdrop-filter: blur(10px);
-}
-
-/* Buttons */
-.stButton>button {
-    border-radius: 999px;
-    border: 1px solid rgba(56,189,248,0.7);
-    background: radial-gradient(circle at top left, #0ea5e9 0, #0369a1 40%, #020617 100%);
-    color: #E5F6FF;
-    font-weight: 600;
-    padding: 0.55rem 1rem;
-    box-shadow: 0 0 22px rgba(56,189,248,0.65);
-    transition: all 0.22s ease-in-out;
-}
-
-.stButton>button:hover {
-    transform: scale(1.06);
-    box-shadow: 0 0 40px rgba(0,255,255,0.9);
-}
-
-/* Prediction box */
-.prediction-box {
-    padding: 18px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, rgba(0, 191, 255, 0.16), rgba(0, 255, 200, 0.10));
-    border: 1px solid rgba(0, 191, 255, 0.55);
-    text-align: center;
-    font-size: 22px;
-    font-weight: 700;
-    color: #E8F8F5;
-    margin-top: 18px;
-    box-shadow: 0 0 28px rgba(0, 191, 255, 0.35);
-}
-
-.prediction-box span {
-    font-size: 32px;
-    color: #00E5FF;
-}
-
-/* Grad-CAM titles */
-.gradcam-title {
-    font-size: 17px;
-    font-weight: 600;
-    color: #E5E7EB;
-    margin-bottom: 6px;
-}
-
-/* Popup for invalid image */
+.fade-in { animation: fadeIn 1.0s ease-in-out; }
+@keyframes fadeIn { from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
 .popup-overlay {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    position: fixed; top:0; left:0; width:100%; height:100%;
     background: rgba(0,0,0,0.75);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
+    display:flex; justify-content:center; align-items:center; z-index:9999;
 }
-
 .popup-box {
     background: rgba(15,23,42,0.96);
     padding: 26px;
@@ -293,29 +208,31 @@ body {
     width: 380px;
     animation: fadeIn 0.8s ease-out;
 }
-
-/* Footer */
-.footer-text {
-    text-align: center;
-    font-size: 13px;
-    color: #9CA3AF;
-    margin-top: 26px;
+#retry_button button {
+    border-radius: 999px;
+    border: 1px solid rgba(56,189,248,0.7);
+    background: radial-gradient(circle at top left, #0ea5e9 0, #0369a1 40%, #020617 100%);
+    color: #E5F6FF;
+    font-weight: 600;
+    padding: 0.55rem 1rem;
+    box-shadow: 0 0 25px rgba(56,189,248,0.55);
+    transition: all 0.25s ease-in-out;
 }
-
+#retry_button button:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 45px rgba(0,255,255,0.8);
+}
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------
 # HEADER
 # -----------------------
-st.markdown(
-    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;letter-spacing:0.06em;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE AI • GRAD‑CAM LAB</div>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    '<div class="fade-in" style="text-align:center;color:#D0D3D4;margin-bottom:18px;">Upload a hand X‑ray, estimate bone age in months, and see where the model is focusing.</div>',
-    unsafe_allow_html=True,
-)
+st.markdown('<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE AI • GRAD‑CAM LAB</div>', unsafe_allow_html=True)
+st.markdown('<div class="fade-in" style="text-align:center;color:#D0D3D4;margin-bottom:18px;">Upload a hand X‑ray, estimate bone age in months, and see where the model is focusing.</div>', unsafe_allow_html=True)
+
+# -----------------------
+# MODEL INFO SECTION
 
 # -----------------------
 # MODEL & CONCEPT INFO
