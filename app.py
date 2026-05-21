@@ -280,6 +280,13 @@ body {
     align-items: center;
     z-index: 9999;
 }
+.result-box {
+    transition: transform 0.3s ease-in-out;
+}
+.result-box:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 40px rgba(0,255,255,0.8);
+}
 
 .popup-box {
     background: rgba(15,23,42,0.96);
@@ -468,12 +475,12 @@ if run_button:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown('<div class="gradcam-title fade-in">Original (Processed)</div>', unsafe_allow_html=True)
-        st.image(img_resized[:, :, ::-1], width=600)
+        st.markdown('<div style="text-align:center;" class="gradcam-title fade-in">Original (Processed)</div>',unsafe_allow_html=True,)
+        st.image(img_resized[:, :, ::-1], width=560)
 
     with col2:
-        st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Heatmap</div>', unsafe_allow_html=True)
-        st.image(overlay[:, :, ::-1], width=600)
+        st.markdown('<div style="text-align:center;" class="gradcam-title fade-in">Grad‑CAM Heatmap</div>',unsafe_allow_html=True,)
+        st.image(overlay[:, :, ::-1], width=560)
 
 # -----------------------
 # FOOTER
