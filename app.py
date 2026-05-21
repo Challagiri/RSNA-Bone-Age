@@ -345,16 +345,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
 # -----------------------
-# CENTERED UPLOAD CARD
-# -----------------------
-# -----------------------
-# SMALL CENTERED UPLOAD BOX
+# SMALL CENTERED UPLOAD BOX WITH UPLOADER INSIDE
 # -----------------------
 st.markdown("""
 <div style="
     margin: 0 auto;
-    max-width: 260px;
+    max-width: 220px;
     background: rgba(15,23,42,0.85);
     border-radius: 14px;
     padding: 14px 16px;
@@ -367,19 +365,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Center the uploader under the heading
-uploader_container = st.container()
-with uploader_container:
-    st.markdown("<div style='display:flex; justify-content:center;'>", unsafe_allow_html=True)
+# Center the uploader directly below the heading
+st.markdown("<div style='display:flex; justify-content:center; margin-top:8px;'>", unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader(
-        "Upload a PA view hand X‑ray (PNG, JPG, JPEG)",
-        type=["png", "jpg", "jpeg"],
-        label_visibility="collapsed",
-        key="file_upload"
-    )
+uploaded_file = st.file_uploader(
+    "Upload a PA view hand X‑ray (PNG, JPG, JPEG)",
+    type=["png", "jpg", "jpeg"],
+    label_visibility="collapsed",
+    key="file_upload"
+)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
 
 gender_option = st.radio(
     "Patient gender (optional):",
