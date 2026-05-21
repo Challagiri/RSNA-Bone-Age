@@ -427,7 +427,7 @@ if run_button:
             animation: fadeIn 1.0s ease-in-out;
             margin-top: 10px;
         ">
-            <div style="font-size: 20px; font-weight: 700; color: #E0FFFF;">
+            <div style="font-size: 24px; font-weight: 700; color: #E0FFFF;">
                 📊 Predicted Bone Age
             </div>
             <div style="font-size: 26px; font-weight: 800; color: #00E5FF; margin-top: 6px;">
@@ -452,7 +452,7 @@ if run_button:
             animation: fadeIn 1.0s ease-in-out;
             margin-top: 10px;
         ">
-            <div style="font-size: 20px; font-weight: 700; color: #E0FFFF;">
+            <div style="font-size: 24px; font-weight: 700; color: #E0FFFF;">
                 🧠 Model Focus Area
             </div>
             <div style="font-size: 18px; color: #B2EBF2; margin-top: 6px;">
@@ -469,11 +469,11 @@ if run_button:
 
     with col1:
         st.markdown('<div class="gradcam-title fade-in">Original (Processed)</div>', unsafe_allow_html=True)
-        st.image(img_resized[:, :, ::-1], width=500)
+        st.image(img_resized[:, :, ::-1], width=600)
 
     with col2:
         st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Heatmap</div>', unsafe_allow_html=True)
-        st.image(overlay[:, :, ::-1], width=500)
+        st.image(overlay[:, :, ::-1], width=600)
 
 # -----------------------
 # FOOTER
