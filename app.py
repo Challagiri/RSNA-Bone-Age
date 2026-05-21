@@ -171,7 +171,7 @@ def detect_focus_region(heatmap):
 # -----------------------
 # PAGE CONFIG
 # -----------------------
-st.set_page_config(page_title="Bone Age AI • Cinematic Grad-CAM", layout="wide")
+st.set_page_config(page_title="Bone Age • Cinematic Grad-CAM", layout="wide")
 
 # -----------------------
 # GLOBAL CINEMATIC STYLE
@@ -234,7 +234,7 @@ body {
     font-weight: 600;
     padding: 0.55rem 1rem;
     box-shadow: 0 0 22px rgba(56,189,248,0.65);
-    transition: all 0.22s ease-in-out;
+    transition: all 0.25s ease-in-out;
 }
 
 .stButton>button:hover {
@@ -348,10 +348,22 @@ st.markdown("""
 # -----------------------
 # CENTERED UPLOAD CARD
 # -----------------------
-st.markdown( '<div class="center-card fade-in">'
-    '<h3 style="text-align:center;color:#E5F6FF;margin-top:0;margin-bottom:10px;"> 🦴 Upload Hand X‑ray</h3>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div style="
+    margin: 0 auto;
+    max-width: 260px;          /* smaller width */
+    background: rgba(15,23,42,0.85);
+    border-radius: 14px;
+    padding: 12px 16px;        /* reduced padding */
+    border: 1px solid rgba(56,189,248,0.6);
+    box-shadow: 0 0 20px rgba(0,255,255,0.25);
+    backdrop-filter: blur(10px);
+    text-align:center;
+">
+    <h3 style="color:#E5F6FF; font-size:18px; margin:0;">🦴 Upload Hand X‑ray</h3>
+</div>
+""", unsafe_allow_html=True)
+
 
 uploaded_file = st.file_uploader(
     "Upload a PA view hand X‑ray (PNG, JPG, JPEG)",
