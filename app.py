@@ -136,9 +136,11 @@ def is_hand_xray_strict(pil_img):
     contrast = np.std(gray)
     edges = cv2.Canny(gray, 50, 150)
     edge_density = np.mean(edges > 0)
+
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contour_count = len(contours)
 
+    # Strongest validation
     if brightness < 170 and contrast > 30 and edge_density > 0.02 and contour_count > 100:
         return True
     return False
@@ -151,9 +153,13 @@ def detect_focus_region(heatmap):
     h = heatmap.shape[0]
     zone_h = h // 3
 
-    ph = np.sum(heatmap[0:zone_h])
-    mt = np.sum(heatmap[zone_h:2*zone_h])
-    cp = np.sum(heatmap[2*zone_h:h])
+    phalanges_zone = heatmap[0:zone_h, :, :]
+    metacarpals_zone = heatmap[zone_h:2*zone_h, :, :]
+    carpals_zone = heatmap[2*zone_h:h, :, :]
+
+    ph = np.sum(phalanges_zone)
+    mt = np.sum(metacarpals_zone)
+    cp = np.sum(carpals_zone)
 
     regions = {
         "Phalanges (Fingers)": ph,
@@ -161,13 +167,14 @@ def detect_focus_region(heatmap):
         "Carpal Bones (Wrist)": cp
     }
 
-    return max(regions, key=regions.get), regions
+    focus_region = max(regions, key=regions.get)
+    return focus_region, regions
 
 
 # -----------------------
 # PAGE CONFIG
 # -----------------------
-st.set_page_config(page_title="Bone Age • Cinematic Grad-CAM", layout="wide")
+st.set_page_config(page_title="Bone Age AI • Cinematic Grad-CAM", layout="wide")
 
 # -----------------------
 # CINEMATIC CSS
@@ -195,38 +202,57 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.stImage img {
-    border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0,255,255,0.25);
-    margin: 10px auto;
-    display: block;
+.center-upload {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 45vh;
 }
 
-.stFileUploader {
-    margin-top: 10px;
-    border-radius: 12px;
-    background: rgba(0,255,255,0.05);
-    box-shadow: 0 0 25px rgba(0,255,255,0.25);
-    padding: 10px;
+.upload-card {
+    background: rgba(15,23,42,0.85);
+    padding: 25px;
+    border-radius: 18px;
+    border: 1px solid rgba(56,189,248,0.6);
+    box-shadow: 0 0 35px rgba(0,255,255,0.35);
+    backdrop-filter: blur(14px);
+    width: 420px;
+    text-align: center;
 }
 
-.run-button button {
-    width:60%;
-    border-radius:999px;
-    border:1px solid rgba(56,189,248,0.7);
-    background:linear-gradient(90deg,#00BFFF 0%,#0066CC 100%);
-    color:#E5F6FF;
-    font-weight:600;
-    font-size:18px;
-    padding:0.75rem 1rem;
-    box-shadow:0 0 25px rgba(0,255,255,0.55);
-    transition:all 0.3s ease-in-out;
-    animation:glowPulse 2.5s infinite alternate;
+.popup-overlay {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.75);
+    display:flex; justify-content:center; align-items:center; z-index:9999;
 }
 
-@keyframes glowPulse {
-    from { box-shadow:0 0 20px rgba(0,255,255,0.4); }
-    to { box-shadow:0 0 40px rgba(0,255,255,0.8); }
+.popup-box {
+    background: rgba(15,23,42,0.96);
+    padding: 26px;
+    border-radius: 18px;
+    border: 1px solid rgba(56,189,248,0.8);
+    box-shadow: 0 0 35px rgba(0,255,255,0.6);
+    backdrop-filter: blur(14px);
+    color: #E0FFFF;
+    text-align: center;
+    width: 380px;
+    animation: fadeIn 0.8s ease-out;
+}
+
+.stButton>button {
+    border-radius: 999px;
+    border: 1px solid rgba(56,189,248,0.7);
+    background: radial-gradient(circle at top left, #0ea5e9 0, #0369a1 40%, #020617 100%);
+    color: #E5F6FF;
+    font-weight: 600;
+    padding: 0.55rem 1rem;
+    box-shadow: 0 0 22px rgba(56,189,248,0.65);
+    transition: all 0.22s ease-in-out;
+}
+
+.stButton>button:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 40px rgba(0,255,255,0.9);
 }
 
 </style>
@@ -235,62 +261,49 @@ body {
 # -----------------------
 # HEADER
 # -----------------------
-st.markdown(
-    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE • GRAD‑CAM LAB</div>',
-    unsafe_allow_html=True,
-)
+st.markdown('<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE AI • GRAD‑CAM LAB</div>', unsafe_allow_html=True)
 
 # -----------------------
-# UPLOAD BLOCK
+# MODEL INFO
 # -----------------------
 st.markdown("""
-<div style="
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-    margin-top:20px;
-    padding:25px;
-    border-radius:18px;
-    background:rgba(15,23,42,0.85);
-    border:1px solid rgba(56,189,248,0.6);
-    box-shadow:0 0 35px rgba(0,255,255,0.35);
-    backdrop-filter:blur(14px);
-    width:60%;
-    margin-left:auto;
-    margin-right:auto;
+<div class="fade-in" style="
+    margin: 20px auto;
+    max-width: 800px;
+    background: rgba(0,255,255,0.08);
+    border: 1px solid rgba(0,255,255,0.45);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 0 25px rgba(0,255,255,0.35);
+    backdrop-filter: blur(10px);
+    text-align: center;
 ">
-    <h3 style="color:#E5F6FF;margin-bottom:10px;">🩻 Upload Hand X‑ray</h3>
+    <h3 style="color:#00E5FF;">🧬 About the Model</h3>
+    <p style="color:#E0FFFF;">
+        This AI model uses <b>EfficientNetV2‑RW‑S</b> trained on thousands of pediatric hand X‑rays.
+        It estimates bone age by analyzing bone growth plates and joint spacing.
+        The <b>Grad‑CAM</b> visualization highlights the regions the model focuses on —
+        typically the <b>carpal bones</b>, <b>metacarpals</b>, and <b>phalanges</b>.
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader(
-    "Upload a PA view hand X‑ray",
-    type=["png", "jpg", "jpeg"],
-    label_visibility="collapsed",
-    key="file_upload"
-)
+# -----------------------
+# CENTERED UPLOAD
+# -----------------------
+st.markdown('<div class="center-upload fade-in">', unsafe_allow_html=True)
 
-# -----------------------
-# GENDER SELECTION
-# -----------------------
-gender_option = st.radio(
-    "Select gender (optional):",
-    ("Not specified", "Male", "Female"),
-    horizontal=True,
-    key="gender_radio"
-)
+with st.container():
+    st.markdown('<div class="upload-card">', unsafe_allow_html=True)
+    st.markdown('<h3 style="color:#E5F6FF;">🩻 Upload Hand X‑ray</h3>', unsafe_allow_html=True)
 
-# -----------------------
-# RUN BUTTON
-# -----------------------
-st.markdown('<div class="run-button">', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload X‑ray", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
 
-run_button = st.button(
-    "🔍 Run Bone Age Prediction",
-    use_container_width=True,
-    key="run_prediction_button"
-)
+    gender_option = st.radio("Gender (optional):", ("Not specified", "Male", "Female"), horizontal=True)
+
+    run_button = st.button("🔍 Predict Bone Age", use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -300,18 +313,33 @@ st.markdown('</div>', unsafe_allow_html=True)
 if run_button:
 
     if uploaded_file is None:
-        st.warning("⚠️ Please upload a hand X‑ray image first.")
+        st.warning("Please upload a hand X‑ray image.")
         st.stop()
 
     orig_image = Image.open(uploaded_file).convert("RGB")
 
+    # STRICT VALIDATION
     if not is_hand_xray_strict(orig_image):
-        st.error("⚠️ Invalid Image — This does not appear to be a hand X‑ray.")
+        st.markdown("""
+        <div class="popup-overlay">
+            <div class="popup-box">
+                <h3 style="color:#00E5FF;">⚠️ Invalid Image</h3>
+                <p>This does not appear to be a hand X‑ray.</p>
+                <p>Please upload a clear hand X‑ray image.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        retry = st.button("🔄 Retry Upload", key="retry_button")
+        if retry:
+            st.experimental_rerun()
         st.stop()
 
-    st.markdown("### 📷 Uploaded Hand X‑ray (Preview)")
-    st.image(orig_image, width=250)
+    # VALID IMAGE → PROCESS
+    st.markdown("### 📷 Uploaded Hand X‑ray")
+    st.image(orig_image, use_column_width=True)
 
+    # Convert to grayscale
     image = orig_image.convert("L")
     img_np = np.array(image)
     img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
@@ -319,7 +347,7 @@ if run_button:
     img_t = tfm(image=img_rgb)["image"]
     img_t = img_t.unsqueeze(0).to(DEVICE)
 
-    gender_val = 1 if gender_option == "Male" else 0
+    gender_val = 0 if gender_option != "Male" else 1
     gender_t = torch.tensor([gender_val], dtype=torch.long, device=DEVICE)
 
     with torch.no_grad():
@@ -339,6 +367,7 @@ if run_button:
         unsafe_allow_html=True,
     )
 
+    # Grad-CAM
     heatmap = generate_gradcam(img_t, gender_t)
 
     img_resized = cv2.resize(
@@ -374,19 +403,17 @@ if run_button:
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
-
     with col1:
-        st.markdown('<div class="gradcam-title fade-in">Original (Processed)</div>', unsafe_allow_html=True)
-        st.image(img_resized[:, :, ::-1], width=250)
-
+        st.markdown('<div class="gradcam-title fade-in">Original Hand X‑ray (Processed)</div>', unsafe_allow_html=True)
+        st.image(img_resized[:, :, ::-1], use_column_width=True)
     with col2:
-        st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Heatmap</div>', unsafe_allow_html=True)
-        st.image(overlay[:, :, ::-1], width=250)
+        st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Focus Map</div>', unsafe_allow_html=True)
+        st.image(overlay[:, :, ::-1], use_column_width=True)
 
 # -----------------------
 # FOOTER
 # -----------------------
 st.markdown(
-    '<div class="footer-text">Bone Age demo • Grad‑CAM visualization for educational purposes only.</div>',
+    '<div class="footer-text">Bone Age AI demo • Grad‑CAM visualization for educational purposes only, not for clinical use.</div>',
     unsafe_allow_html=True,
 )
