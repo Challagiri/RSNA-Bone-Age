@@ -366,27 +366,27 @@ st.markdown('</div>', unsafe_allow_html=True)
 # -----------------------
 # MAIN LOGIC
 # -----------------------
-    if run_button:
-    
-        if uploaded_file is None:
-            st.warning("⚠️ Please upload a hand X‑ray image first.")
-            st.stop()
-    
-        orig_image = Image.open(uploaded_file).convert("RGB")
-    
-        if not is_hand_xray_strict(orig_image):
-            st.error("⚠️ Invalid Image — This does not appear to be a hand X‑ray.")
-            st.stop()
-    
-        st.markdown("### 📷 Uploaded Hand X‑ray (Preview)")
-        st.image(orig_image, width=250)
-    
-        image = orig_image.convert("L")
-        img_np = np.array(image)
-        img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
-    
-        img_t = tfm(image=img_rgb)["image"]
-        img_t = img_t.unsqueeze(0).to(DEVICE)
+if run_button:
+
+    if uploaded_file is None:
+        st.warning("⚠️ Please upload a hand X‑ray image first.")
+        st.stop()
+
+    orig_image = Image.open(uploaded_file).convert("RGB")
+
+    if not is_hand_xray_strict(orig_image):
+        st.error("⚠️ Invalid Image — This does not appear to be a hand X‑ray.")
+        st.stop()
+
+    st.markdown("### 📷 Uploaded Hand X‑ray (Preview)")
+    st.image(orig_image, width=250)
+
+    image = orig_image.convert("L")
+    img_np = np.array(image)
+    img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
+
+    img_t = tfm(image=img_rgb)["image"]
+    img_t = img_t.unsqueeze(0).to(DEVICE)
 
         if gender_option == "Male":
             gender_val = 1
