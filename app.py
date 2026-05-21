@@ -446,11 +446,11 @@ if run_button:
 
     with col1:
         st.markdown('<div class="gradcam-title fade-in">Original (Processed)</div>', unsafe_allow_html=True)
-        st.image(img_resized[:, :, ::-1], width=350)
+        st.image(img_resized[:, :, ::-1], width=500)
 
     with col2:
         st.markdown('<div class="gradcam-title fade-in">Grad‑CAM Heatmap</div>', unsafe_allow_html=True)
-        st.image(overlay[:, :, ::-1], width=350)
+        st.image(overlay[:, :, ::-1], width=500)
 
 # -----------------------
 # FOOTER
