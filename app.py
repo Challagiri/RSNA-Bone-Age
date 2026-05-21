@@ -348,9 +348,8 @@ st.markdown("""
 # -----------------------
 # CENTERED UPLOAD CARD
 # -----------------------
-st.markdown('<div class="center-card fade-in">', unsafe_allow_html=True)
-st.markdown(
-    '<h3 style="text-align:center;color:#E5F6FF;margin-top:0;margin-bottom:10px;">🩻 Upload Hand X‑ray</h3>',
+st.markdown( '<div class="center-card fade-in">'
+    '<h3 style="text-align:center;color:#E5F6FF;margin-top:0;margin-bottom:10px;"> 🦴 Upload Hand X‑ray</h3>',
     unsafe_allow_html=True,
 )
 
