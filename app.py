@@ -309,7 +309,7 @@ body {
 # HEADER
 # -----------------------
 st.markdown(
-    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;letter-spacing:0.06em;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE AI • GRAD‑CAM LAB</div>',
+    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE • GRAD‑CAM LAB</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
@@ -366,37 +366,25 @@ st.markdown('</div>', unsafe_allow_html=True)
 # -----------------------
 # MAIN LOGIC
 # -----------------------
-if run_button:
-    if uploaded_file is None:
-        st.warning("Please upload a hand X‑ray image first.")
-    else:
-        orig_image = Image.open(uploaded_file).convert("RGB")
-
-        # Strict validation BEFORE grayscale
-        if not is_hand_xray_strict(orig_image):
-            st.markdown("""
-            <div class="popup-overlay">
-                <div class="popup-box">
-                    <h3 style="color:#00E5FF; margin-top:0;">⚠️ Invalid Image</h3>
-                    <p style="margin-bottom:8px;">This does not appear to be a hand X‑ray.</p>
-                    <p style="margin-bottom:16px;">Please upload a clear hand X‑ray image to continue.</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.button("🔄 Retry upload"):
-                st.experimental_rerun()
+    if run_button:
+    
+        if uploaded_file is None:
+            st.warning("⚠️ Please upload a hand X‑ray image first.")
             st.stop()
-
-        # VALID IMAGE → PROCESS
-        st.markdown("### 📷 Uploaded Hand X‑ray")
-        st.image(orig_image, use_column_width=True)
-
-        # Convert to grayscale for model
+    
+        orig_image = Image.open(uploaded_file).convert("RGB")
+    
+        if not is_hand_xray_strict(orig_image):
+            st.error("⚠️ Invalid Image — This does not appear to be a hand X‑ray.")
+            st.stop()
+    
+        st.markdown("### 📷 Uploaded Hand X‑ray (Preview)")
+        st.image(orig_image, width=250)
+    
         image = orig_image.convert("L")
         img_np = np.array(image)
         img_rgb = cv2.cvtColor(img_np, cv2.COLOR_GRAY2RGB)
-
+    
         img_t = tfm(image=img_rgb)["image"]
         img_t = img_t.unsqueeze(0).to(DEVICE)
 
