@@ -352,7 +352,7 @@ st.markdown("""
 st.markdown("""
 <div style="
     margin: 0 auto;
-    max-width: 220px;
+    max-width: 250px;
     background: rgba(15,23,42,0.85);
     border-radius: 14px;
     padding: 14px 16px;
