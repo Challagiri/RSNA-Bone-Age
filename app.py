@@ -309,7 +309,7 @@ body {
 # HEADER
 # -----------------------
 st.markdown(
-    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;letter-spacing:0.06em;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE AI • GRAD‑CAM LAB</div>',
+    '<div class="fade-in" style="font-size:46px;font-weight:900;text-align:center;color:#EAF2F8;letter-spacing:0.06em;text-shadow:0 0 25px rgba(0,255,255,0.9);">BONE AGE • GRAD‑CAM LAB</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
@@ -359,7 +359,7 @@ gender_option = st.radio(
     horizontal=True,
 )
 
-run_button = st.button("🔍 Run Bone Age Prediction", use_container_width=True)
+run_button = st.button("🔍 Run Bone Age Prediction", use_container_width=250)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -397,16 +397,6 @@ if run_button:
     months_val = pred_months.item()
     years_val = months_val / 12.0
 
-    st.markdown(
-        f"""
-        <div class="prediction-box fade-in">
-            Predicted Bone Age<br>
-            <span>{months_val:.1f} months</span><br>
-            ({years_val:.2f} years)
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
     heatmap = generate_gradcam(img_t, gender_t)
 
@@ -418,29 +408,62 @@ if run_button:
 
     focus_region, region_scores = detect_focus_region(heatmap)
 
-    st.markdown(f"""
-    <div style="
-        padding: 20px;
-        margin-top: 20px;
-        border-radius: 18px;
-        background: rgba(0, 255, 255, 0.08);
-        border: 1px solid rgba(0, 255, 255, 0.45);
-        box-shadow: 0 0 25px rgba(0, 255, 255, 0.55);
-        text-align: center;
-        backdrop-filter: blur(12px);
-        animation: fadeIn 1.0s ease-in-out;
-    ">
-        <div style="font-size: 26px; font-weight: 700; color: #E0FFFF;">
-            🧠 Model Focus Area
+    # -----------------------
+    # RESULT BOXES (SIDE-BY-SIDE SMALL BOXES)
+    # -----------------------
+    
+    colA, colB = st.columns(2)
+    
+    with colA:
+        st.markdown(f"""
+        <div style="
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.45);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.55);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 1.0s ease-in-out;
+            margin-top: 10px;
+        ">
+            <div style="font-size: 20px; font-weight: 700; color: #E0FFFF;">
+                📊 Predicted Bone Age
+            </div>
+            <div style="font-size: 26px; font-weight: 800; color: #00E5FF; margin-top: 6px;">
+                {months_val:.1f} months
+            </div>
+            <div style="font-size: 18px; color: #B2EBF2;">
+                ({years_val:.2f} years)
+            </div>
         </div>
-        <div style="font-size: 20px; margin-top: 8px; color: #B2EBF2;">
-            The model is primarily focusing on:
+        """, unsafe_allow_html=True)
+    
+    with colB:
+        st.markdown(f"""
+        <div style="
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.45);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.55);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 1.0s ease-in-out;
+            margin-top: 10px;
+        ">
+            <div style="font-size: 20px; font-weight: 700; color: #E0FFFF;">
+                🧠 Model Focus Area
+            </div>
+            <div style="font-size: 18px; color: #B2EBF2; margin-top: 6px;">
+                The model is primarily focusing on:
+            </div>
+            <div style="font-size: 24px; font-weight: 800; color: #00E5FF; margin-top: 6px;">
+                {focus_region}
+            </div>
         </div>
-        <div style="font-size: 32px; margin-top: 10px; font-weight: 800; color: #00E5FF;">
-            {focus_region}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+
 
     col1, col2 = st.columns(2)
 
